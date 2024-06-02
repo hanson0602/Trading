@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>交易紀錄</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f8f9fa;
+            margin: 0;
+            padding: 20px;
+        }
+        h1 {
+            text-align: center;
+            color: #343a40;
+        }
+        form {
+            background-color: #ffffff;
+            border-radius: 5px;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+            padding: 20px;
+            margin-bottom: 20px;
+            max-width: 600px;
+            margin: auto;
+        }
+        label {
+            display: block;
+            margin-top: 10px;
+        }
+        input[type="number"], input[type="text"], input[type="datetime-local"], select {
+            width: calc(100% - 20px);
+            padding: 10px;
+            margin-top: 5px;
+            border: 1px solid #ced4da;
+            border-radius: 4px;
+            box-sizing: border-box;
+        }
+        input[type="range"] {
+            width: 100%;
+        }
+        button {
+            display: block;
+            width: 100%;
+            padding: 10px;
+            background-color: #007bff;
+            border: none;
+            color: white;
+            border-radius: 4px;
+            margin-top: 20px;
+            cursor: pointer;
+        }
+        button:hover {
+            background-color: #0056b3;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+        }
+        th, td {
+            border: 1px solid #dee2e6;
+            padding: 12px;
+            text-align: center;
+        }
+        th {
+            background-color: #e9ecef;
+        }
+        .profit {
+            color: green;
+        }
+        .loss {
+            color: red;
+        }
+        @media (max-width: 768px) {
+            table, thead, tbody, th, td, tr {
+                display: block;
+            }
+            th, td {
+                padding: 10px;
+            }
+            th {
+                background-color: #f1f1f1;
+            }
+            td {
+                border: none;
+                position: relative;
+                padding-left: 50%;
+                text-align: right;
+            }
+            td::before {
+                position: absolute;
+                left: 10px;
+                width: 45%;
+                padding-right: 10px;
+                white-space: nowrap;
+            }
+            td:nth-of-type(1)::before { content: "部位大小 (USDT)"; }
+            td:nth-of-type(2)::before { content: "進場原因和日期時間"; }
+            td:nth-of-type(3)::before { content: "出場性質"; }
+            td:nth-of-type(4)::before { content: "出場原因和日期時間"; }
+            td:nth-of-type(5)::before { content: "進場價格和出場價格"; }
+            td:nth-of-type(6)::before { content: "損益平衡進場點"; }
+            td:nth-of-type(7)::before { content: "盈虧率和實現盈虧"; }
+            td:nth-of-type(8)::before { content: "盈虧率折線圖"; }
+        }
+    </style>
+</head>
+<body>
+    <h1>交易紀錄</h1>
+    
+    <form id="trade-form">
+        <label>
+            保證金數量 (USDT):
+            <input type="number" id="margin" required>
+        </label>
+        <label>
+            槓桿大小:
+            <input type="range" id="leverage" min="1" max="125" value="1">
+            <span id="leverage-value">1</span>
+        </label>
+        <label>
+            進場原因和日期時間:
+            <input type="text" id="entry-reason" required>
+            <input type="datetime-local" id="entry-datetime" required>
+        </label>
+        <label>
+            出場性質:
+            <select id="exit-nature" required>
+                <option value="止損">止損</option>
+                <option value="止盈">止盈</option>
+            </select>
+        </label>
+        <label>
+            出場原因和日期時間:
+            <input type="text" id="exit-reason" required>
+            <input type="datetime-local" id="exit-datetime" required>
+        </label>
+        <label>
+            進場價格:
+            <input type="number" step="0.01" id="entry-price" required>
+        </label>
+        <label>
+            出場價格:
+            <input type="number" step="0.01" id="exit-price" required>
+        </label>
+        <button type="submit">添加交易紀錄</button>
+    </form>
+    
+    <table>
+        <thead>
+            <tr>
+                <th>部位大小 (USDT)</th>
+                <th>進場原因和日期時間</th>
+                <th>出場性質</th>
+                <th>出場原因和日期時間</th>
+                <th>進場價格和出場價格</th>
+                <th>損益平衡進場點</th>
+                <th>盈虧率和實現盈虧</th>
+                <th>盈虧率折線圖</th>
+            </tr>
+        </thead>
+        <tbody id="trade-records">
+            <!-- 交易紀錄將動態插入這裡 -->
+        </tbody>
+    </table>
+    
+    <script>
+        // 更新槓桿顯示值
+        document.getElementById("leverage").addEventListener("input", function() {
+            document.getElementById("leverage-value").innerText = this.value;
+        });
+
+        // 計算損益平衡進場點和盈虧
+        function calculateBreakeven(entryPrice, feeRate) {
+            return entryPrice * (1 + feeRate);
+        }
+
+        function calculatePnL(entryPrice, exitPrice, feeRate) {
+            const breakevenPrice = calculateBreakeven(entryPrice, feeRate);
+            const profitLoss = exitPrice - breakevenPrice;
+            const profitLossRate = profitLoss / entryPrice * 100;
+            return { profitLoss, profitLossRate };
+        }
+
+        // 處理表單提交
+        document.getElementById("trade-form").addEventListener("submit", function(event) {
+            event.preventDefault();
+            
+            const margin = parseFloat(document.getElementById("margin").value);
+            const leverage = parseInt(document.getElementById("leverage").value);
+            const positionSize = (margin * leverage).toFixed(2);
+            const entryReason = document.getElementById("entry-reason").value;
+            const entryDateTime = document.getElementById("entry-datetime").value;
+            const exitNature = document.getElementById("exit-nature").value;
+            const exitReason = document.getElementById("exit-reason").value;
+            const exitDateTime = document.getElementById("exit-datetime").value;
+            const entryPrice = parseFloat(document.getElementById("entry-price").value);
+            const exitPrice = parseFloat(document.getElementById("exit-price").value);
+            const feeRate = 0.0005;
+            const breakevenEntryPrice = calculateBreakeven(entryPrice, feeRate).toFixed(2);
+            const { profitLoss, profitLossRate } = calculatePnL(entryPrice, exitPrice, feeRate);
+            const profitLossClass = profitLossRate >= 0 ? "profit" : "loss";
+            
+            const row = document.createElement("tr");
+            row.innerHTML = `
+                <td>${positionSize}</td>
+                <td>${entryReason} (${entryDateTime})</td>
+                <td>${exitNature}</td>
+                <td>${exitReason} (${exitDateTime})</td>
+                <td>${entryPrice} / ${exitPrice}</td>
+                <td>${breakevenEntryPrice}</td>
+                <td class="${profitLossClass}">${profitLossRate.toFixed(2)}% (${profitLoss.toFixed(2)})</td>
+                <td><!-- 盈虧率折線圖區域 --></td>
+            `;
+            
+            document.getElementById("trade-records").appendChild(row);
+            
+            // 重置表單
+            document.getElementById("trade-form").reset();
+            document.getElementById("leverage-value").innerText = "1";
+        });
+    </script>
+</body>
+</html>
